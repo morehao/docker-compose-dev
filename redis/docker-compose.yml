@@ -1,34 +1,9 @@
 version: '3.8'
 
 services:
-  nsqlookupd:
-    image: nsqio/nsq
-    container_name: nsqlookupd
-    command: /nsqlookupd
+  redis:
+    image: redis:7.4.1
+    container_name: redis
     ports:
-      - "4160:4160"  # TCP for nsqd
-      - "4161:4161"  # HTTP for admin/debug
-
-  nsqd:
-    image: nsqio/nsq
-    container_name: nsqd
-    command: >
-      /nsqd
-      --broadcast-address=nsqd
-      --lookupd-tcp-address=nsqlookupd:4160
-    depends_on:
-      - nsqlookupd
-    ports:
-      - "4150:4150"  # TCP for producers
-      - "4151:4151"  # HTTP for stats/admin
-
-  nsqadmin:
-    image: nsqio/nsq
-    container_name: nsqadmin
-    command: >
-      /nsqadmin
-      --lookupd-http-address=nsqlookupd:4161
-    depends_on:
-      - nsqlookupd
-    ports:
-      - "4171:4171"  # Web UI
+      - "6379:6379"
+    restart: unless-stopped

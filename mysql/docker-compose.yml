@@ -1,34 +1,11 @@
 version: '3.8'
 
 services:
-  nsqlookupd:
-    image: nsqio/nsq
-    container_name: nsqlookupd
-    command: /nsqlookupd
+  mysql:
+    image: mysql:8.4.3
+    container_name: mysql
     ports:
-      - "4160:4160"  # TCP for nsqd
-      - "4161:4161"  # HTTP for admin/debug
-
-  nsqd:
-    image: nsqio/nsq
-    container_name: nsqd
-    command: >
-      /nsqd
-      --broadcast-address=nsqd
-      --lookupd-tcp-address=nsqlookupd:4160
-    depends_on:
-      - nsqlookupd
-    ports:
-      - "4150:4150"  # TCP for producers
-      - "4151:4151"  # HTTP for stats/admin
-
-  nsqadmin:
-    image: nsqio/nsq
-    container_name: nsqadmin
-    command: >
-      /nsqadmin
-      --lookupd-http-address=nsqlookupd:4161
-    depends_on:
-      - nsqlookupd
-    ports:
-      - "4171:4171"  # Web UI
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: "123456"
+    restart: unless-stopped
