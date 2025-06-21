@@ -3,9 +3,17 @@ version: '3.8'
 services:
   mysql:
     image: mysql:8.4.3
-    container_name: mysql
+    container_name: mysql8
     ports:
       - "3306:3306"
     environment:
       MYSQL_ROOT_PASSWORD: "123456"
+    volumes:
+      - /Users/morehao/Documents/works/myself/docker-data/mysql8:/var/lib/mysql
+    networks:
+      - local_net
     restart: unless-stopped
+
+networks:
+  local_net:
+    external: true
