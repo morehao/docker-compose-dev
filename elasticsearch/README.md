@@ -7,11 +7,11 @@
 
 启动 `Elastic` ：
 ```
-docker-compose up -d
+docker compose up -d
 ```
 停止 `Elastic` ：
 ```
-docker-compose down
+docker compose down
 ```
 
 # 服务信息

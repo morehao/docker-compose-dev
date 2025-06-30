@@ -7,6 +7,9 @@ services:
     container_name: prometheus
     ports:
       - "9090:9090"
+    volumes:
+      - ./prometheus/config/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus/data:/prometheus
     networks:
       - local_net
 
@@ -15,9 +18,21 @@ services:
     container_name: grafana
     ports:
       - "3000:3000"
+    volumes:
+      - ./grafana/data:/var/lib/grafana
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=123456
+    networks:
+      - local_net
+
+  consul:
+    image: hashicorp/consul:latest
+    container_name: consul
+    ports:
+      - "8500:8500"
+    volumes:
+      - ./consul/data:/consul/data
     networks:
       - local_net
 

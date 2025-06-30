@@ -6,10 +6,10 @@ services:
     container_name: mysql8
     ports:
       - "3306:3306"
+    volumes:
+      - ./data:/var/lib/mysql
     environment:
       MYSQL_ROOT_PASSWORD: "123456"
-    volumes:
-      - /Users/morehao/Documents/works/myself/docker-data/mysql8:/var/lib/mysql
     networks:
       - local_net
     restart: unless-stopped
@@ -17,3 +17,4 @@ services:
 networks:
   local_net:
     external: true
+

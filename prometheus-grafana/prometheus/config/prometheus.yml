@@ -1,0 +1,22 @@
+global:
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  evaluation_interval: 15s
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets:
+          - prometheus:9090
+  - job_name: consul-all-services
+    consul_sd_configs:
+      - server: consul:8500
+
+    relabel_configs:
+      # 保留所有名字包含 -service 的服务
+      - source_labels: [__meta_consul_service]
+        regex: .*-service
+        action: keep
+
+      # 动态写 job 名字
+      - source_labels: [__meta_consul_service]
+        target_label: job
