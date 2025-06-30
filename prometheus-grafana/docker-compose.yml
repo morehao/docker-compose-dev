@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
 
   prometheus:
@@ -33,6 +31,15 @@ services:
       - "8500:8500"
     volumes:
       - ./consul/data:/consul/data
+    networks:
+      - local_net
+
+  # 可选组件
+  pushgateway:
+    image: prom/pushgateway:latest
+    container_name: pushgateway
+    ports:
+      - "9091:9091"
     networks:
       - local_net
 

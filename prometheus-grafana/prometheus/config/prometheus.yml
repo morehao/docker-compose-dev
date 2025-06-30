@@ -7,6 +7,13 @@ scrape_configs:
     static_configs:
       - targets:
           - prometheus:9090
+
+  # 可选方式
+  - job_name: push-gateway
+    static_configs:
+      - targets:
+          - pushgateway:9091
+
   - job_name: consul-all-services
     consul_sd_configs:
       - server: consul:8500
