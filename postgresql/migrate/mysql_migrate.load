@@ -1,0 +1,5 @@
+LOAD DATABASE
+     FROM mysql://root:123456@mysql_migrate:3307/migrate_test
+     INTO postgresql://postgres:123456@postgres17:5432/migrate_test
+
+WITH include drop, create tables, create indexes, reset sequences;

@@ -1,0 +1,19 @@
+services:
+  pgvector:
+    image: pgvector/pgvector:pg17
+    container_name: povector17
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_PASSWORD: 123456
+    networks:
+      - local_net
+    shm_size: 1g  # ✅ 避免并行索引构建内存不足
+    restart: unless-stopped
+
+networks:
+  local_net:
+    external: true
+
