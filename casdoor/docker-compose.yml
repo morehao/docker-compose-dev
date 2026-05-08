@@ -36,6 +36,3 @@ services:
 networks:
   local_net:
     external: true
-
-volumes:
-  casdoor_data:
