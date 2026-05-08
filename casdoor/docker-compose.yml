@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  casdoor:
+    container_name: casdoor
+    build:
+      context: /root/project/casdoor
+      dockerfile: /root/project/casdoor/Dockerfile
+      target: STANDARD
+    entrypoint: /bin/sh -c './server --createDatabase=true'
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      - db
+    environment:
+      RUNNING_IN_DOCKER: "true"
+    volumes:
+      - ./config:/conf/
+    networks:
+      - local_net
+    restart: unless-stopped
+  db:
+    container_name: casdoor-db
+    image: mysql:8.0.25
+    platform: linux/amd64
+    ports:
+      - "127.0.0.1:3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: "123456"
+    volumes:
+      - ./data:/var/lib/mysql
+    networks:
+      - local_net
+    restart: unless-stopped
+
+networks:
+  local_net:
+    external: true
+
+volumes:
+  casdoor_data:
