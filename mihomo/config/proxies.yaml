@@ -1,0 +1,6 @@
+# 代理节点配置
+# 请从订阅地址获取并提取 proxies 和 proxy-groups 部分
+# 订阅提取示例：见 USAGE.md
+
+proxies: []
+proxy-groups: []

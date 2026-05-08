@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  mihomo:
+    container_name: mihomo
+    image: metacubex/mihomo:latest
+    restart: unless-stopped
+    volumes:
+      - ./config/config.yaml:/root/.config/mihomo/config.yaml:ro
+      - ./data:/root/.config/mihomo
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+    network_mode: host
+    environment:
+      - TZ=Asia/Shanghai
