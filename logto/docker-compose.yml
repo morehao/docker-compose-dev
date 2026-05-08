@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  app:
+    container_name: logto
+    depends_on:
+      postgres:
+        condition: service_healthy
+    image: svhd/logto:${TAG-latest}
+    entrypoint: ["sh", "-c", "npm run cli db seed -- --swe && npm start"]
+    ports:
+      - "127.0.0.1:3001:3001"
+      - "127.0.0.1:3002:3002"
+    environment:
+      - TRUST_PROXY_HEADER=1
+      - DB_URL=postgres://postgres:p0stgr3s@logto-db:5432/logto
+      - PRIVATE_KEY_ROTATION_GRACE_PERIOD
+      - ENDPOINT=https://49.232.218.218
+      - ADMIN_ENDPOINT=https://49.232.218.218
+    networks:
+      - local_net
+    restart: unless-stopped
+  postgres:
+    container_name: logto-db
+    image: postgres:17-alpine
+    user: postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: p0stgr3s
+    volumes:
+      - ./data:/var/lib/postgresql/data
+    networks:
+      - local_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+networks:
+  local_net:
+    external: true
