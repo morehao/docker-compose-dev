@@ -13,7 +13,7 @@ services:
       - "127.0.0.1:3002:3002"
     environment:
       - TRUST_PROXY_HEADER=1
-      - DB_URL=postgres://postgres:p0stgr3s@logto-db:5432/logto
+      - DB_URL=postgres://postgres:p0stgr3s@postgres:5432/logto
       - PRIVATE_KEY_ROTATION_GRACE_PERIOD
       - ENDPOINT=https://49.232.218.218
       - ADMIN_ENDPOINT=https://49.232.218.218
