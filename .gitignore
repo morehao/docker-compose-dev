@@ -26,4 +26,5 @@ go.work.sum
 .idea
 .DS_Store
 
-**/data/**
+**/data/
+**/gitea-data/**

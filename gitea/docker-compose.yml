@@ -1,0 +1,30 @@
+services:
+  gitea:
+    image: gitea/gitea:latest
+    container_name: gitea
+    user: root
+    environment:
+      - USER_UID=1000
+      - USER_GID=1000
+      - GITEA__database__DB_TYPE=sqlite3
+      - GITEA__server__DOMAIN=49.232.218.218
+      - GITEA__server__HTTP_PORT=3009
+      - GITEA__server__ROOT_URL=http://49.232.218.218:3009
+      - GITEA__server__DISABLE_SSH=true
+      - GITEA__security__INSTALL_LOCK=true
+      - GITEA__admin__USERNAME=admin
+      - GITEA__admin__PASSWORD=admin-tencent
+      - GITEA__admin__EMAIL=admin@example.com
+    volumes:
+      - ./gitea-data:/data
+      - ./init.sh:/init.sh:ro
+    ports:
+      - "3009:3009"
+    networks:
+      - local_net
+    restart: unless-stopped
+    entrypoint: ["/init.sh"]
+
+networks:
+  local_net:
+    external: true
