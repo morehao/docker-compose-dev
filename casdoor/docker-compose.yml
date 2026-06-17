@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   casdoor:
     container_name: casdoor
@@ -11,7 +9,8 @@ services:
     ports:
       - "127.0.0.1:8000:8000"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     environment:
       RUNNING_IN_DOCKER: "true"
     volumes:
@@ -19,6 +18,13 @@ services:
     networks:
       - local_net
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8000/.well-known/openid-configuration"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
   db:
     container_name: casdoor-db
     image: mysql:8.0.25
@@ -32,6 +38,11 @@ services:
     networks:
       - local_net
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p123456"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 networks:
   local_net:
