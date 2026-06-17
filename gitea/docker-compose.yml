@@ -7,13 +7,13 @@ services:
       - USER_UID=1000
       - USER_GID=1000
       - GITEA__database__DB_TYPE=sqlite3
-      - GITEA__server__DOMAIN=49.232.218.218
+      - GITEA__server__DOMAIN=${GITEA_DOMAIN}
       - GITEA__server__HTTP_PORT=3009
-      - GITEA__server__ROOT_URL=http://49.232.218.218:3009
+      - GITEA__server__ROOT_URL=http://${GITEA_DOMAIN}:3009
       - GITEA__server__DISABLE_SSH=true
       - GITEA__security__INSTALL_LOCK=true
       - GITEA__admin__USERNAME=admin
-      - GITEA__admin__PASSWORD=admin-tencent
+      - GITEA__admin__PASSWORD=${GITEA_ADMIN_PASSWORD}
       - GITEA__admin__EMAIL=admin@example.com
     volumes:
       - ./gitea-data:/data

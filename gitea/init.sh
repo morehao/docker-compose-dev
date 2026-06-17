@@ -16,10 +16,10 @@ TEMP_PATH = /data/gitea/uploads
 
 [server]
 APP_DATA_PATH = /data/gitea
-DOMAIN = 49.232.218.218
+DOMAIN = ${GITEA_DOMAIN}
 SSH_DOMAIN = localhost
 HTTP_PORT = 3009
-ROOT_URL = http://49.232.218.218:3009
+ROOT_URL = http://${GITEA_DOMAIN}:3009
 DISABLE_SSH = true
 SSH_PORT = 22
 SSH_LISTEN_PORT = 22
@@ -60,7 +60,7 @@ PATH = /data/git/lfs
 GITEA_EOF
   chown -R git:git /data /data/git
   su git -c "/usr/local/bin/gitea migrate"
-  su git -c "/usr/local/bin/gitea admin user create --username admin --password admin-tencent --email admin@example.com --admin"
+  su git -c "/usr/local/bin/gitea admin user create --username admin --password ${GITEA_ADMIN_PASSWORD} --email admin@example.com --admin"
   touch /data/gitea/.initialized
   chown git:git /data/gitea/.initialized
 fi
