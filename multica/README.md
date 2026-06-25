@@ -29,7 +29,7 @@ docker network create local_net
 # 1. 进入目录
 cd multica
 
-# 2. 从模板创建环境变量文件
+# 2. 从模板创建环境变量文件（.env 已在 .gitignore 中，不会提交）
 cp .env.example .env
 
 # 3. 编辑 .env，至少修改以下值：
