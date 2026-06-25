@@ -20,7 +20,7 @@ services:
     image: pgvector/pgvector:pg17
     container_name: multica-postgres
     ports:
-      - "127.0.0.1:5432:5432"
+      - "5432:5432"
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
     environment:
@@ -41,7 +41,7 @@ services:
     image: redis:7-alpine
     container_name: multica-redis
     ports:
-      - "127.0.0.1:6379:6379"
+      - "6379:6379"
     volumes:
       - ./data/redis:/data
     networks:
@@ -55,7 +55,7 @@ services:
       postgres:
         condition: service_healthy
     ports:
-      - "127.0.0.1:${BACKEND_PORT:-8080}:8080"
+      - "${BACKEND_PORT:-8080}:8080"
     volumes:
       - ./data/uploads:/app/data/uploads
     environment:
@@ -108,7 +108,7 @@ services:
     depends_on:
       - backend
     ports:
-      - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"
+      - "${FRONTEND_PORT:-3000}:3000"
     environment:
       HOSTNAME: "0.0.0.0"
     networks:
