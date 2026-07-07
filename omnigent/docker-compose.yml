@@ -1,0 +1,63 @@
+# Omnigent 自托管部署
+# 使用预构建镜像从 GHCR 拉取，无需本地构建
+#
+# 推荐使用 deploy.sh 启动，会自动检测已有中间件
+#
+# 前置条件:
+#   docker network create local_net
+#
+# 快速开始:
+#   cp .env.example .env
+#   bash deploy.sh
+#
+# 访问地址:
+#   Omnigent: http://<服务器IP>:8000
+
+name: omnigent
+
+services:
+  postgres:
+    profiles: ["db"]
+    image: postgres:16-alpine
+    container_name: omnigent-postgres
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-omnigent}
+      POSTGRES_USER: ${POSTGRES_USER:-omnigent}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    networks:
+      - local_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-omnigent} -d ${POSTGRES_DB:-omnigent}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  omnigent:
+    image: ${OMNIGENT_IMAGE:-ghcr.io/omnigent-ai/omnigent-server}:${OMNIGENT_IMAGE_TAG:-latest}
+    container_name: omnigent-server
+    ports:
+      - "${OMNIGENT_PORT:-8000}:8000"
+    volumes:
+      - ./data/artifacts:/data
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-omnigent}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-omnigent}
+      ARTIFACT_DIR: /data/artifacts
+      HOST: 0.0.0.0
+      PORT: "8000"
+      OMNIGENT_ADMIN_CREDENTIALS_PATH: /data/admin-credentials
+      OMNIGENT_AUTH_ENABLED: "${OMNIGENT_AUTH_ENABLED:-0}"
+      OMNIGENT_AUTH_PROVIDER: "${OMNIGENT_AUTH_PROVIDER:-}"
+      OMNIGENT_ACCOUNTS_COOKIE_SECRET: "${OMNIGENT_ACCOUNTS_COOKIE_SECRET:-}"
+      OMNIGENT_ACCOUNTS_BASE_URL: "${OMNIGENT_ACCOUNTS_BASE_URL:-}"
+      OMNIGENT_ACCOUNTS_INIT_ADMIN_PASSWORD: "${OMNIGENT_ACCOUNTS_INIT_ADMIN_PASSWORD:-}"
+      OMNIGENT_ACCOUNTS_SESSION_TTL_HOURS: "${OMNIGENT_ACCOUNTS_SESSION_TTL_HOURS:-8}"
+    networks:
+      - local_net
+    restart: unless-stopped
+
+networks:
+  local_net:
+    external: true
