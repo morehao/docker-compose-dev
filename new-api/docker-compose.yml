@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  new-api:
+    image: calciumion/new-api:latest
+    container_name: new-api
+    ports:
+      - "43000:3000"
+    volumes:
+      - ./data:/data
+    environment:
+      - SQL_DSN=postgresql://postgres:123456@postgres17:5432/new-api
+      - REDIS_CONN_STRING=redis://redis7:6379/0
+      - BATCH_UPDATE_ENABLED=true
+      - NODE_NAME=new-api-node-1
+    networks:
+      - local_net
+    restart: unless-stopped
+
+networks:
+  local_net:
+    external: true

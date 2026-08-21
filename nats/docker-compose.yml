@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  nats:
+    image: nats:2.12.7
+    container_name: nats
+    command: >
+      --jetstream
+      --store_dir=/data
+      -m 8222
+    ports:
+      - "4222:4222"  # 客户端连接
+      - "8222:8222"  # HTTP 监控
+    volumes:
+      - ./data:/data
+    networks:
+      - local_net
+    restart: unless-stopped
+
+networks:
+  local_net:
+    external: true
