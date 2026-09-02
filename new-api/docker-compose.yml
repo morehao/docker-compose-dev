@@ -9,7 +9,7 @@ services:
     volumes:
       - ./data:/data
     environment:
-      - SQL_DSN=postgresql://postgres:123456@postgres17:5432/new-api
+      - SQL_DSN=postgresql://postgres:123456@postgres18:5432/new-api
       - REDIS_CONN_STRING=redis://redis7:6379/0
       - BATCH_UPDATE_ENABLED=true
       - NODE_NAME=new-api-node-1
