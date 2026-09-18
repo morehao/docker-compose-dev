@@ -2,6 +2,13 @@
 
 日期：2026-09-17
 
+> **⚠ 部分被取代（2026-09-18）**：本文的 `local_net` + `ports` 端口映射方案已被
+> [2026-09-18-rustfs-ark-iam-sso-design.md](2026-09-18-rustfs-ark-iam-sso-design.md) 取代 ——
+> RustFS 现以 `network_mode: host` 运行以接入 Ark IAM OIDC 统一登录，不再加入 `local_net`，
+> 端口改由 `RUSTFS_ADDRESS` / `RUSTFS_CONSOLE_ADDRESS` 直接指定，并新增 OIDC 提供方与策略供给配置。
+> 下文保留为初始部署的决策记录（镜像、存储布局、凭证、健康检查、重启策略等选择仍然有效）；
+> 涉及「网络 / 端口 / `.env` 变量」的段落请以新文档和 `rustfs/README.md` 为准。
+
 ## 背景
 
 `docker-compose-dev` 是各类中间件的 Docker Compose 合集，每个服务一个子目录，通过共享的

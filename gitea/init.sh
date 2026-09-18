@@ -1,7 +1,7 @@
 #!/bin/sh
 if [ ! -f /data/gitea/.initialized ]; then
   mkdir -p /data/gitea/conf /data/gitea/log /data/git/repositories /data/git/lfs /data/git/.ssh
-  cat > /data/gitea/conf/app.ini << 'GITEA_EOF'
+  cat > /data/gitea/conf/app.ini << GITEA_EOF
 APP_NAME = Gitea: Git with a cup of tea
 RUN_MODE = prod
 
@@ -60,7 +60,9 @@ PATH = /data/git/lfs
 GITEA_EOF
   chown -R git:git /data /data/git
   su git -c "/usr/local/bin/gitea migrate"
-  su git -c "/usr/local/bin/gitea admin user create --username admin --password ${GITEA_ADMIN_PASSWORD} --email admin@example.com --admin"
+  # 本地应急账号：用户名不得与 IAM 的 preferred_username（admin）相同，否则 SSO 首次登录会落到「关联账号」页
+  GITEA_ADMIN_USER="${GITEA_ADMIN_USERNAME:-gitea_admin}"
+  su git -c "/usr/local/bin/gitea admin user create --username ${GITEA_ADMIN_USER} --password ${GITEA_ADMIN_PASSWORD} --email ${GITEA_ADMIN_USER}@example.com --admin"
   if [ -n "${GITEA_OIDC_CLIENT_ID}" ] && [ -n "${GITEA_OIDC_CLIENT_SECRET}" ]; then
     echo "Creating OIDC auth source '${GITEA_OIDC_NAME}' for Ark IAM..."
     su git -c "/usr/local/bin/gitea admin auth add-oauth --name ${GITEA_OIDC_NAME} --provider openidConnect --key ${GITEA_OIDC_CLIENT_ID} --secret ${GITEA_OIDC_CLIENT_SECRET} --auto-discover-url ${GITEA_OIDC_DISCOVERY_URL} --scopes ${GITEA_OIDC_SCOPES} --group-claim-name ${GITEA_OIDC_GROUP_CLAIM_NAME} --admin-group ${GITEA_OIDC_ADMIN_GROUP} --restricted-group ${GITEA_OIDC_RESTRICTED_GROUP}" || echo "WARN: add-oauth failed (is Ark IAM gateway reachable at ${GITEA_OIDC_DISCOVERY_URL}?)"

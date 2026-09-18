@@ -16,11 +16,16 @@ services:
       - GITEA__server__ROOT_URL=http://${GITEA_DOMAIN:-localhost}:3009
       - GITEA__server__DISABLE_SSH=true
       - GITEA__security__INSTALL_LOCK=true
-      - GITEA__admin__USERNAME=admin
-      - GITEA__admin__PASSWORD=${GITEA_ADMIN_PASSWORD}
-      - GITEA__admin__EMAIL=admin@example.com
+      - GITEA_DOMAIN=${GITEA_DOMAIN:-localhost}
+      # 本地应急账号（init.sh 用这两个变量建号）。注意：Gitea 没有 [admin] 配置段，
+      # 写 GITEA__admin__USERNAME/PASSWORD/EMAIL 不会生效（只会往 app.ini 塞一个无用段）。
+      - GITEA_ADMIN_USERNAME=${GITEA_ADMIN_USERNAME:-gitea_admin}
+      - GITEA_ADMIN_PASSWORD=${GITEA_ADMIN_PASSWORD}
       # 全局 OAuth2 客户端行为：用户名取 preferred_username、JIT 自动建号、请求 profile/email
       - GITEA__oauth2_client__USERNAME=preferred_username
+      # JIT 建号（首次 OIDC 登录即以 SSO 身份建号，username 取 preferred_username）。
+      # 约定：本地应急账号不得叫 admin —— IAM 的 preferred_username 就是 admin，
+      # 同名会让 Gitea 落到「关联账号」页而不是直接登录。故本地账号命名为 gitea_admin。
       - GITEA__oauth2_client__ENABLE_AUTO_REGISTRATION=true
       - GITEA__oauth2_client__OPENID_CONNECT_SCOPES=openid profile email
       # Ark IAM OIDC 登录源参数（由 init.sh 通过 gitea admin auth add-oauth 创建）
