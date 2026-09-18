@@ -1,0 +1,84 @@
+services:
+  rustfs:
+    image: rustfs/rustfs:latest
+    container_name: rustfs
+    # host 网络：容器与 Mac 共用网络栈，容器内的 localhost:8100 就是宿主机上的 ark-iam gateway。
+    # 于是 OIDC issuer 可以用 http://localhost:8100/oidc —— 浏览器侧只走 loopback（不经过系统代理、
+    # 不受私网 IP 拦截影响），且 SSO 会话 cookie 与 localhost:4000 的登录页同源，免去重复登录。
+    # 代价：不能再写 ports: 端口映射，S3/控制台直接监听宿主 9010/9011；也不再加入 local_net。
+    network_mode: host
+    volumes:
+      - ./data:/data
+    environment:
+      RUSTFS_VOLUMES: /data/rustfs0
+      RUSTFS_ADDRESS: 0.0.0.0:9010            # 宿主 9010 = S3 API（原先靠 9010:9000 映射）
+      RUSTFS_CONSOLE_ADDRESS: 0.0.0.0:9011    # 宿主 9011 = 控制台（原先靠 9011:9001 映射）
+      RUSTFS_CONSOLE_ENABLE: "true"
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:-rustfsadmin}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:-rustfsadmin}
+      RUSTFS_OBS_LOGGER_LEVEL: info
+      # ark-iam 在宿主机 loopback，OIDC discovery/JWKS/token 属出站 Full policy：
+      # loopback 属「可被白名单覆盖」的类别，但仍须登记精确 origin（scheme://host:port，不带路径）；
+      # 该配置启动时读取一次，改后要重建容器。
+      RUSTFS_OUTBOUND_ALLOW_ORIGINS: "http://localhost:8100"
+      # OIDC 提供方整组走环境变量（无后缀 = 提供方 ID "default"）。
+      # role_policy 是「配置」上的字段：config_url 为空时整组 env 会被直接丢弃，
+      # 所以必须一次配全；env 与持久化配置同 ID 时 env 生效，控制台里那条 default 会被本组覆盖。
+      # 不写 RUSTFS_IDENTITY_OPENID_ENABLE：该键为空时默认启用（字面量写错反而会被解析成停用）。
+      RUSTFS_IDENTITY_OPENID_CONFIG_URL: "http://localhost:8100/oidc/.well-known/openid-configuration"
+      RUSTFS_IDENTITY_OPENID_CLIENT_ID: "rustfs_console"
+      # 密钥明文来自 ark-iam 控制台 rustfs_console 详情页「密钥管理」，只显示一次
+      RUSTFS_IDENTITY_OPENID_CLIENT_SECRET: "9052ff385acbc9de5e7c5bd4f34dbf6e3c93be598e1f7e7152e53734c50b7a47"
+      RUSTFS_IDENTITY_OPENID_SCOPES: "openid,profile,email"
+      RUSTFS_IDENTITY_OPENID_REDIRECT_URI: "http://localhost:9011/rustfs/admin/v3/oidc/callback/default"
+      RUSTFS_IDENTITY_OPENID_REDIRECT_URI_DYNAMIC: "off"
+      RUSTFS_IDENTITY_OPENID_DISPLAY_NAME: "Ark IAM"
+      # 策略映射走 ID token 的 groups 声明（值 = ark-iam 角色编码）。
+      # role_policy 与 claim 映射互斥：一旦设置 role_policy，groups 只会作为「组上下文」而不再
+      # 映射成策略名，所以本组不再设置 ROLE_POLICY（缺省即空）。
+      RUSTFS_IDENTITY_OPENID_GROUPS_CLAIM: "groups"
+      # claim_prefix 是命名空间隔离：只能命中存储侧 iam_ 前缀的自建策略。不加前缀的话，
+      # 任何能创建角色的租户管理员都能造一个叫 consoleAdmin 的角色编码，直接拿到存储超管权限。
+      # 注意前缀只隔离「不同下游产品之间」的命名空间，隔离不了「同一租户里不同应用之间」——
+      # 后者由 ark-iam 侧两层保证：groups 只下发 rustfs_console 所属 rustfs_local 应用的角色，
+      # 且 rustfs_local 的「应用角色模板」(application.role_template) 是这些编码的唯一定义处
+      # （租户自建角色编码恒为空串、不参与 groups，见 docs/design/application-integration-guide.md §3.4）。
+      RUSTFS_IDENTITY_OPENID_CLAIM_PREFIX: "iam_"
+      # ⚠ 迁移状态（2026-09-18 核对）：ark-iam 已把 groups 的作用域收敛到「登录所用客户端所属应用」，
+      # 并把契约值的**定义权收归应用方**（应用角色模板）。rustfs_console 属于应用 rustfs_local，因此
+      # groups 里只会出现 **rustfs_local 下**的角色编码；原先依赖的 platform_admin/tenant_admin
+      # （平台/租户管理后台的锚点角色）不会再下发，租户也不能再自己造带编码的角色。
+      # 已核实：本机 RustFS 无任何 bucket/object（.rustfs.sys/buckets 下只有内部系统项），
+      # 策略清单 12 条，其中 iam_ 命名空间有 4 条 —— 新增的 iam_console_admin / iam_readonly 已建好，
+      # 遗留的 iam_platform_admin / iam_tenant_admin 已无来源（groups 不再产生这两个值）。
+      # 运维工具与策略定义（mc 已停止分发，用这个零依赖脚本）：本目录 rustfs_policy.py + policies/*.json
+      #   python3 rustfs_policy.py list | show <name> | add <name> <file> | remove <name>
+      # 遗留两条的删除等 ③ 授权核对通过后再执行（当前 gateway 已是新构建，锚点编码不再进 groups）：
+      #   python3 rustfs_policy.py remove iam_platform_admin && python3 rustfs_policy.py remove iam_tenant_admin
+      # 注：iam_readonly 比 RustFS 内置 readonly 多了 ListAllMyBuckets/ListBucket/ListBucketMultipartUploads
+      # （内置那条只有 GetBucketLocation/GetObject/GetBucketQuota，控制台里连桶和对象列表都看不到）。
+      # 落地四步与进度（2026-09-18）：
+      #   ① 平台控制台给 rustfs_local 声明角色模板（应用更新 roleTemplate）——【已完成】
+      #      [{"code":"console_admin","name":"存储控制台管理员"},{"code":"readonly","name":"存储只读用户"}]
+      #      ——会自动物化到所有已开通该应用的租户（新增/改名/移除均同步；移除即撤权）；
+      #   ② 开通 rustfs_local 到目标租户 ——【已完成：t_platform，两角色已物化为 builtin/normal】；
+      #   ③ 在租户控制台把这些角色授权给需要访问存储的成员 ——【待做】；
+      #      **没授权就等于 groups 为空**，登录会直接报下面那条 InvalidRequest；
+      #   ④ 用 rustfs_console 登录核对：ID token 的 groups 与实际命中策略须一致。
+      # 组名 → 策略名 = 前缀 + 角色编码（crates/iam/src/oidc.rs:1505 map_claims_to_policies）。
+      # ⚠ 解析是硬校验，不是"认不出就跳过"（rustfs/src/admin/service/federated_identity.rs:275
+      # `all_oidc_policies_resolved`）：选中集合为空、或其中任一条策略在当前 IAM 里不存在，都会直接
+      # 抛 InvalidRequest，登录页看到的是
+      #   <Error><Code>InvalidRequest</Code>
+      #   <Message>OIDC policy mapping did not resolve to current policies</Message></Error>
+      # 本地实测：① ② 都做完但没有 ③（未授权 → groups 为空）时，就是这个报错。
+      # 顺序硬要求：策略 → 模板 → 授权；策略已在位，缺任一环节的表现都是上面这条报错而非静默降权。
+      # 会话用户名取 preferred_username（默认值，显式写出便于排障）：ark-iam 已把它放进 ID token。
+      RUSTFS_IDENTITY_OPENID_USERNAME_CLAIM: "preferred_username"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9010/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped

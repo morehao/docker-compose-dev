@@ -61,6 +61,12 @@ GITEA_EOF
   chown -R git:git /data /data/git
   su git -c "/usr/local/bin/gitea migrate"
   su git -c "/usr/local/bin/gitea admin user create --username admin --password ${GITEA_ADMIN_PASSWORD} --email admin@example.com --admin"
+  if [ -n "${GITEA_OIDC_CLIENT_ID}" ] && [ -n "${GITEA_OIDC_CLIENT_SECRET}" ]; then
+    echo "Creating OIDC auth source '${GITEA_OIDC_NAME}' for Ark IAM..."
+    su git -c "/usr/local/bin/gitea admin auth add-oauth --name ${GITEA_OIDC_NAME} --provider openidConnect --key ${GITEA_OIDC_CLIENT_ID} --secret ${GITEA_OIDC_CLIENT_SECRET} --auto-discover-url ${GITEA_OIDC_DISCOVERY_URL} --scopes ${GITEA_OIDC_SCOPES} --group-claim-name ${GITEA_OIDC_GROUP_CLAIM_NAME} --admin-group ${GITEA_OIDC_ADMIN_GROUP} --restricted-group ${GITEA_OIDC_RESTRICTED_GROUP}" || echo "WARN: add-oauth failed (is Ark IAM gateway reachable at ${GITEA_OIDC_DISCOVERY_URL}?)"
+  else
+    echo "Skip OIDC auth source: GITEA_OIDC_CLIENT_ID/SECRET not set."
+  fi
   touch /data/gitea/.initialized
   chown git:git /data/gitea/.initialized
 fi
