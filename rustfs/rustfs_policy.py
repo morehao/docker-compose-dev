@@ -18,8 +18,11 @@
 
 背景（与 ark-iam 的对接约定，详见 docker-compose.yml 顶部注释）：
   OIDC 用户的策略名 = CLAIM_PREFIX(`iam_`) + ID token `groups` 声明里的角色编码，纯拼接、无映射表；
-  且未设置 ROLE_POLICY，故 groups 是唯一来源。策略缺失会被静默跳过，一个都没命中即拒绝登录。
-  因此「ark-iam 应用角色模板里声明的每个 code」都必须在这里有一条同名 `iam_<code>` 策略。
+  且未设置 ROLE_POLICY，故 groups 是唯一来源。策略解析是**硬校验**（`all_oidc_policies_resolved`，
+  rustfs/src/admin/service/federated_identity.rs:38）：选中集合为空、或其中**任一条**解析不到，
+  整次登录都以 `InvalidRequest` 被拒 —— 不是静默跳过、也不是降权。
+  因此「ark-iam 应用角色模板里声明的每个 code」都必须在这里有一条同名 `iam_<code>` 策略，
+  且供给顺序必须是：策略 → 角色模板 → 成员授权。
 """
 from __future__ import annotations
 

@@ -14,8 +14,11 @@ docker compose up -d
 ## 访问
 
 - **地址**: http://localhost:3009
-- **管理员账号**: `admin` / `admin-tencent`
-- **登录方式**: 本地账号，或点击「Ark IAM」用 Ark IAM 账号登录（首次自动建号）
+- **本地应急账号**: `gitea_admin` / `giteaadmin123`（`init.sh` 创建，Gitea 管理员；Ark IAM 不可用时用它进后台）
+- **`admin` 用户名留给 Ark IAM SSO**：首次点击「Ark IAM」按 `preferred_username`（IAM 侧就是 `admin`）**即时建号（JIT）**，此后每次登录都命中该账号。**本地账号不要取 `admin`**——与 SSO 身份同名时 Gitea 无法直接登录，会落到「关联账号」页要求手工绑定。
+- **登录方式**: 本地账号（`gitea_admin`），或点「Ark IAM」用 Ark IAM 账号登录（首次即时建号，无需手工关联）
+- **一键 SSO 入口（建议收藏）**: <http://localhost:3009/user/oauth2/ark-iam> —— 直接打开即走 OIDC：浏览器里有有效中心会话（`iam_sso_session`）时**免密直进**，没有时才跳 IAM 登录页。等价于点登录页的「Ark IAM」按钮。
+- **为什么不开启 Gitea 的自动跳转**: 访问 `:3009` 时 Gitea 只显示自己的登录页、不会自动跳 OIDC（标准 RP 行为，SSO 由 RP 发起）。Gitea 的自动跳转条件是 `performAutoLoginOAuth2`（`routers/web/auth/auth.go:221`）要求的「唯一 OAuth2 源 + `ENABLE_PASSWORD_SIGNIN_FORM=false` + `ENABLE_PASSKEY_AUTHENTICATION=false`」，其中**关掉密码表单会让本地应急账号无法从 Web 登录**，与上一行的应急入口冲突，故不采用。
 
 ## OIDC 接入 Ark IAM
 
@@ -27,6 +30,7 @@ docker compose up -d
      `[{"code":"gitea_admin","name":"Gitea 管理员"},{"code":"gitea_restricted","name":"Gitea 受限用户"}]`
    - OAuth 客户端 `gitea_console`：
      - redirectURIs：`["http://localhost:3009/user/oauth2/ark-iam/callback"]`
+     - postLogoutRedirectURIs：`["http://localhost:3009/"]` ← **必填**。Gitea 退出登录会做 RP-Initiated Logout（`buildOIDCEndSessionURL`：`end_session?client_id=…&post_logout_redirect_uri=<AppURL>/`），IAM 按**精确匹配**校验该白名单，不填会返回 `{"error":"invalid_request","error_description":"post_logout_redirect_uri invalid"}`
      - grantTypes：`["authorization_code"]`
      - responseTypes：`["code"]`
      - tokenEndpointAuthMethod：`client_secret_basic`
@@ -46,12 +50,14 @@ docker compose up -d
 容器以 `network_mode: host` 运行，与 `rustfs` 一致：容器内 `localhost:8100` 即宿主机 gateway，
 issuer 统一为 `http://localhost:8100/oidc`，可与 RustFS 共享 SSO 会话。
 
-`init.sh` 首次初始化时通过 `gitea admin auth add-oauth` 创建登录源，读取 `.env`：
+`init.sh` 首次初始化时读取 `.env`（创建本地应急账号 + 通过 `gitea admin auth add-oauth` 创建登录源）：
 
 | 变量 | 默认 | 说明 |
 |---|---|---|
+| `GITEA_ADMIN_USERNAME` | `gitea_admin` | 本地应急账号用户名（**不得与 IAM 的 `preferred_username`（`admin`）同名**） |
+| `GITEA_ADMIN_PASSWORD` | - | 本地应急账号口令（建号时用；改已初始化实例的口令见下方 `change-password`） |
 | `GITEA_OIDC_CLIENT_ID` | - | OIDC client_id（= `gitea_console`） |
-| `GITEA_OIDC_CLIENT_SECRET` | - | client_secret（仅存 `.env`，不入库） |
+| `GITEA_OIDC_CLIENT_SECRET` | - | client_secret（`init.sh` 写入 Gitea 登录源；IAM 侧只存哈希） |
 | `GITEA_OIDC_DISCOVERY_URL` | `http://localhost:8100/oidc/.well-known/openid-configuration` | discovery 地址 |
 | `GITEA_OIDC_SCOPES` | `openid,profile,email` | 必须含 `profile`（`groups` 声明依赖） |
 | `GITEA_OIDC_GROUP_CLAIM_NAME` | `groups` | 角色声明名 |
@@ -87,6 +93,22 @@ docker exec gitea su git -c "gitea admin auth add-oauth \
   --group-claim-name groups --admin-group gitea_admin --restricted-group gitea_restricted"
 ```
 
+已初始化后要**更换** client_secret（例如在 Ark IAM 控制台重新生成了密钥），用 `update-oauth` 就地更新，**不要**删 `.initialized` 重建——那会连同本地账号一起重建：
+
+```bash
+docker exec -u git gitea gitea admin auth list        # 取登录源 ID（通常为 1）
+docker exec -u git gitea gitea admin auth update-oauth --id 1 --secret <新的 client_secret>
+# 记得同步改 .env 的 GITEA_OIDC_CLIENT_SECRET，否则下次重建数据目录会退回旧密钥
+```
+
+已初始化后要**重置**本地账号口令：
+
+```bash
+# --must-change-password=false 避免下次登录被强制改密
+docker exec -u git gitea gitea admin user change-password \
+  --username gitea_admin --password '<新口令>' --must-change-password=false
+```
+
 ## 验证（本地账号）
 
 ```bash
@@ -100,7 +122,7 @@ curl -s -o /dev/null -w "%{http_code}" http://localhost:3009
 curl -s http://localhost:3009/api/v1/version
 
 # 4. 检查管理员登录
-curl -s -u "admin:admin-tencent" http://localhost:3009/api/v1/user
+curl -s -u "gitea_admin:giteaadmin123" http://localhost:3009/api/v1/user
 ```
 
 ## 配置说明
@@ -117,8 +139,12 @@ curl -s -u "admin:admin-tencent" http://localhost:3009/api/v1/user
 
 1. 预写入 `app.ini` 配置文件
 2. 以 `git` 用户执行 `gitea migrate` 初始化数据库
-3. 创建管理员账户 `admin`
+3. 创建**本地管理员**账户 `${GITEA_ADMIN_USERNAME:-gitea_admin}`（口令取自 `GITEA_ADMIN_PASSWORD`；**用户名不要与 IAM 的 `preferred_username`（`admin`）同名**，否则 SSO 首次登录会落到「关联账号」页）
 4. 若配置了 `GITEA_OIDC_CLIENT_ID/SECRET`，通过 `gitea admin auth add-oauth` 创建 Ark IAM 登录源
 5. 标记初始化完成，后续启动跳过以上步骤
+
+> **两个容易踩的前提**（缺一则初始化建不出可用账号/登录源）：
+> - `GITEA_ADMIN_USERNAME` / `GITEA_ADMIN_PASSWORD` 必须由 compose **透传进容器**（`init.sh` 直接读这两个变量）。**不要**用 `GITEA__admin__USERNAME/PASSWORD/EMAIL`——Gitea 没有 `[admin]` 配置段，那组变量不生效，只会往 `app.ini` 里塞一个被忽略的 `[admin]` 段（compose 里已移除）。
+> - `init.sh` 只在 `/data/gitea/.initialized` 不存在（全新数据目录）时执行。已初始化的实例改 `.env` 不生效，登录源要用 `gitea admin auth update-oauth` 更新、口令要用 `gitea admin user change-password` 更新。
 
 默认数据目录 `gitea-data/` 已在 `.gitignore` 中排除；`.env` 同样被忽略，`client_secret` 不入库。
