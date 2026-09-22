@@ -1,0 +1,63 @@
+# TripStar（旅途星辰）AI 旅行智能体
+#
+# 说明：本项目需要从源码构建镜像（前端 Vue + 后端 FastAPI），
+#      构建上下文由 TRIPSTAR_SRC 指定，默认 /root/project/TripStar。
+#
+# 前置条件：Docker / Docker Compose
+#
+# 快速开始：
+#   cp .env.example .env   # 编辑并填入 LLM、高德等 Key
+#   ./deploy.sh            # 等价于 docker compose up -d --build
+#
+# 访问地址：http://localhost:7860
+
+name: tripstar
+
+services:
+  tripstar:
+    build:
+      context: ${TRIPSTAR_SRC:-/root/project/TripStar}
+      dockerfile: Dockerfile
+      args:
+        # 前端 JS API 相关参数在构建期注入，修改后需重新构建镜像
+        VITE_AMAP_WEB_JS_KEY: ${VITE_AMAP_WEB_JS_KEY:-}
+        VITE_AMAP_SECURITY_JS_CODE: ${VITE_AMAP_SECURITY_JS_CODE:-}
+    image: ${TRIPSTAR_IMAGE:-tripstar:latest}
+    container_name: tripstar
+    ports:
+      - "${TRIPSTAR_PORT:-7860}:7860"
+    environment:
+      # ---- LLM（OpenAI 兼容接口）----
+      LLM_API_KEY: ${LLM_API_KEY}
+      LLM_BASE_URL: ${LLM_BASE_URL}
+      LLM_MODEL_ID: ${LLM_MODEL_ID}
+      LLM_TIMEOUT: ${LLM_TIMEOUT:-600}
+      # ---- 高德地图（后端 Web 服务 Key）----
+      VITE_AMAP_WEB_KEY: ${VITE_AMAP_WEB_KEY}
+      # ---- 小红书（可选）----
+      XHS_COOKIE: ${XHS_COOKIE:-}
+      # ---- Google Maps（可选）----
+      GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
+      GOOGLE_MAPS_PROXY: ${GOOGLE_MAPS_PROXY:-}
+      # ---- 用户偏好记忆模块（可选）----
+      ENABLE_USER_MEMORY: ${ENABLE_USER_MEMORY:-false}
+      MEMORY_THRESHOLD: ${MEMORY_THRESHOLD:-2.0}
+      MIN_INIT_WEIGHT: ${MIN_INIT_WEIGHT:-4.0}
+      MEMORY_DECAY_FACTOR: ${MEMORY_DECAY_FACTOR:-0.97}
+      MEMORY_MAX_RECALL: ${MEMORY_MAX_RECALL:-10}
+      MEMORY_MAX_SINGLE_CONTENT: ${MEMORY_MAX_SINGLE_CONTENT:-120}
+      MEMORY_USE_SQLITE: ${MEMORY_USE_SQLITE:-false}
+      # ---- 服务运行参数 ----
+      HOST: 0.0.0.0
+      PORT: "7860"
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      # 用户偏好记忆（SQLite）等运行时数据持久化
+      - ./data:/app/backend/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:7860/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped

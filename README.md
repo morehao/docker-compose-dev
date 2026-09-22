@@ -30,6 +30,7 @@ docker network create local_net
 | `redis/` | Redis | 缓存/存储 |
 | `rocketmq/` | RocketMQ | 消息队列 |
 | `rustfs/` | RustFS | 对象存储 |
+| `tripstar/` | TripStar | AI 旅行智能体 |
 | `whodb/` | WhoDB | 数据库管理工具 |
 
 各服务在子目录内使用，进入对应目录后执行 `docker-compose up -d` 启动。
