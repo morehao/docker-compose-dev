@@ -15,10 +15,10 @@ docker compose up -d
 
 - **地址**: http://localhost:3009
 - **本地应急账号**: `gitea_admin` / `giteaadmin123`（`init.sh` 创建，Gitea 管理员；Ark IAM 不可用时用它进后台）
-- **`admin` 用户名留给 Ark IAM SSO**：首次点击「Ark IAM」按 `preferred_username`（IAM 侧就是 `admin`）**即时建号（JIT）**，此后每次登录都命中该账号。**本地账号不要取 `admin`**——与 SSO 身份同名时 Gitea 无法直接登录，会落到「关联账号」页要求手工绑定。
-- **登录方式**: 本地账号（`gitea_admin`），或点「Ark IAM」用 Ark IAM 账号登录（首次即时建号，无需手工关联）
+- **`admin` 用户名留给 Ark IAM SSO**：点「Ark IAM」按 `preferred_username`（IAM 侧就是 `admin`）登录。**注意（实测修正）：首次 SSO 登录并非"即时建号"，而会落到 `/user/link_account` 关联/注册页，需手动点「注册帐号」→「完成帐号」注册一次**，之后每次登录都命中该账号、免密直进。（`[oauth2_client] ENABLE_AUTO_REGISTRATION=true` 是全局项，不足以让 per-login-source 自动建号，详见文末「已知坑」。）**本地账号不要取 `admin`**——与 SSO 身份同名时无法直登。
+- **登录方式**: 本地账号（`gitea_admin`），或点「Ark IAM」用 Ark IAM 账号登录（首次需在注册页完成一次注册，之后免密直进）
 - **一键 SSO 入口（建议收藏）**: <http://localhost:3009/user/oauth2/ark-iam> —— 直接打开即走 OIDC：浏览器里有有效中心会话（`iam_sso_session`）时**免密直进**，没有时才跳 IAM 登录页。等价于点登录页的「Ark IAM」按钮。
-- **为什么不开启 Gitea 的自动跳转**: 访问 `:3009` 时 Gitea 只显示自己的登录页、不会自动跳 OIDC（标准 RP 行为，SSO 由 RP 发起）。Gitea 的自动跳转条件是 `performAutoLoginOAuth2`（`routers/web/auth/auth.go:221`）要求的「唯一 OAuth2 源 + `ENABLE_PASSWORD_SIGNIN_FORM=false` + `ENABLE_PASSKEY_AUTHENTICATION=false`」，其中**关掉密码表单会让本地应急账号无法从 Web 登录**，与上一行的应急入口冲突，故不采用。
+- **为什么不开启 Gitea 的自动跳转**: 访问 `:3009` 时 Gitea 只显示自己的登录页、不会自动跳 OIDC（标准 RP 行为，SSO 由 RP 发起）。Gitea 的自动跳转条件是 `performAutoLoginOAuth2`（见 Gitea 源码 `routers/web/auth/auth.go`）要求的「唯一 OAuth2 源 + `ENABLE_PASSWORD_SIGNIN_FORM=false` + `ENABLE_PASSKEY_AUTHENTICATION=false`」，其中**关掉密码表单会让本地应急账号无法从 Web 登录**，与上一行的应急入口冲突，故不采用。
 
 ## OIDC 接入 Ark IAM
 
@@ -47,15 +47,18 @@ cp .env.example .env   # 填 GITEA_OIDC_CLIENT_SECRET
 docker compose up -d
 ```
 
-容器以 `network_mode: host` 运行，与 `rustfs` 一致：容器内 `localhost:8100` 即宿主机 gateway，
-issuer 统一为 `http://localhost:8100/oidc`，可与 RustFS 共享 SSO 会话。
+容器以 `network_mode: host` 运行，issuer 统一为 `http://localhost:8100/oidc`，可与 RustFS 共享 SSO 会话。
+
+> **⚠ host 网络能否"容器内 `localhost` = 宿主机"取决于 Docker 运行时**（实测结论，别只凭"和 rustfs 一样"照搬）：
+> - **OrbStack**（本机实际运行时）：`--network host` **真正共享宿主机 loopback**，容器内 `localhost:8100` 直达宿主 gateway（实测 discovery 200 / token_endpoint 可达 / jwks 200）。**保留 host 网络即可，compose 无需改。**
+> - **Docker Desktop for Mac**：host 网络 = 容器所在 Linux VM 的 loopback，**不是** Mac 的 127.0.0.1，容器内 `localhost:8100` 连不到宿主 gateway。此时需去掉 `network_mode: host`、改 `ports: ["3009:3009"]`，并配 `extra_hosts: localhost:host-gateway` + discovery 改 `http://host.docker.internal:8100/...`（注意 issuer 一致性）。
 
 `init.sh` 首次初始化时读取 `.env`（创建本地应急账号 + 通过 `gitea admin auth add-oauth` 创建登录源）：
 
 | 变量 | 默认 | 说明 |
 |---|---|---|
 | `GITEA_ADMIN_USERNAME` | `gitea_admin` | 本地应急账号用户名（**不得与 IAM 的 `preferred_username`（`admin`）同名**） |
-| `GITEA_ADMIN_PASSWORD` | - | 本地应急账号口令（建号时用；改已初始化实例的口令见下方 `change-password`） |
+| `GITEA_ADMIN_PASSWORD` | - | 本地应急账号口令（**必填**，缺失则 `init.sh` 建号失败；改已初始化实例的口令见下方 `change-password`） |
 | `GITEA_OIDC_CLIENT_ID` | - | OIDC client_id（= `gitea_console`） |
 | `GITEA_OIDC_CLIENT_SECRET` | - | client_secret（`init.sh` 写入 Gitea 登录源；IAM 侧只存哈希） |
 | `GITEA_OIDC_DISCOVERY_URL` | `http://localhost:8100/oidc/.well-known/openid-configuration` | discovery 地址 |
@@ -121,8 +124,8 @@ curl -s -o /dev/null -w "%{http_code}" http://localhost:3009
 # 3. 检查 API 版本
 curl -s http://localhost:3009/api/v1/version
 
-# 4. 检查管理员登录
-curl -s -u "gitea_admin:giteaadmin123" http://localhost:3009/api/v1/user
+# 4. 检查管理员登录（口令以你 .env 的 GITEA_ADMIN_PASSWORD 为准；本仓示例 .env 为 giteaadmin123，.env.example 默认 change-me）
+curl -s -u "gitea_admin:<你的 GITEA_ADMIN_PASSWORD>" http://localhost:3009/api/v1/user
 ```
 
 ## 配置说明
@@ -131,7 +134,7 @@ curl -s -u "gitea_admin:giteaadmin123" http://localhost:3009/api/v1/user
 - SSH: 已禁用
 - 安装锁: 已启用（跳过安装引导页，首次启动自动初始化）
 - 实例域名: `${GITEA_DOMAIN:-localhost}`
-- 网络: `network_mode: host`（与 `rustfs` 一致，便于统一 SSO）
+- 网络: `network_mode: host`（便于统一 SSO；依赖运行时——OrbStack 下容器内 localhost=宿主机，Docker Desktop for Mac 需改端口映射，见「启动」一节）
 
 ## 初始化原理
 
@@ -146,5 +149,25 @@ curl -s -u "gitea_admin:giteaadmin123" http://localhost:3009/api/v1/user
 > **两个容易踩的前提**（缺一则初始化建不出可用账号/登录源）：
 > - `GITEA_ADMIN_USERNAME` / `GITEA_ADMIN_PASSWORD` 必须由 compose **透传进容器**（`init.sh` 直接读这两个变量）。**不要**用 `GITEA__admin__USERNAME/PASSWORD/EMAIL`——Gitea 没有 `[admin]` 配置段，那组变量不生效，只会往 `app.ini` 里塞一个被忽略的 `[admin]` 段（compose 里已移除）。
 > - `init.sh` 只在 `/data/gitea/.initialized` 不存在（全新数据目录）时执行。已初始化的实例改 `.env` 不生效，登录源要用 `gitea admin auth update-oauth` 更新、口令要用 `gitea admin user change-password` 更新。
+
+## 已知坑（实测补充）
+
+### 坑1：首次 SSO 不即时建号，落「关联/注册」页
+`[oauth2_client] ENABLE_AUTO_REGISTRATION=true` 只是**全局项**，不足以让 per-login-source（OAuth2 登录源）自动建号。
+首次 SSO 登录会落到 `/user/link_account`，手动点「注册帐号」→「完成帐号」注册一次后才免密。不要把文档口径写成"即时建号（JIT）"。
+
+### 坑2（易翻车）：账号 `external_id`（= IAM `sub`）与当前签发 `sub` 不一致 → 每次登录反复回关联页
+现象：SSO 登录**每次都跳到 `/user/link_account`，无法直登**。
+根因：Gitea 账号的 `external_id` 与 IAM 当前 `sub`（`person:<uuid>`）不匹配——常见于注册时用的是旧 sub、或 IAM 侧 person 被重建导致 sub 变更。
+排障：先比对 Gitea 账号 `external_id` 与 ID token 的 `sub`，**不要先怀疑令牌/网络**。
+
+```bash
+# 1) 查看账号与 external_id（sqlite 直查或用 admin CLI）
+docker exec gitea sh -c "sqlite3 /data/gitea/gitea.db 'SELECT id,name,login_name FROM user;'"
+docker exec gitea sh -c "sqlite3 /data/gitea/gitea.db 'SELECT external_id,user_id FROM external_login_user;'"
+# 2) 删除 sub 不一致的账号（--purge 连仓库/数据一起清）
+docker exec -u git gitea gitea admin user delete --id <n> --purge
+# 3) 重新走一次 SSO，会用正确的当前 sub 建号；之后免密直进
+```
 
 默认数据目录 `gitea-data/` 已在 `.gitignore` 中排除；`.env` 同样被忽略，`client_secret` 不入库。
