@@ -1,57 +1,104 @@
+# RocketMQ 本地开发环境：NameServer + Broker（Proxy 可选）+ Dashboard
+#
+# 前置（只需一次，合集约定）：docker network create local_net
+# 启动：docker compose up -d
+# 需要 gRPC 客户端时：docker compose --profile proxy up -d
+# 停止：docker compose down（数据保留在 ./data，删掉 ./data 即彻底重置）
+#
+# 版本说明：
+#   - apache/rocketmq 用 5.5.0。Docker Hub 上 5.5.1 还没有镜像，`latest` 也停在 5.5.0。
+#   - 控制台必须锁版本：2.1.0 把容器内端口从 8080 改成了 8082，
+#     之前用 `latest` + `8082:8080` 的映射就是这么静默失效的（容器健康但页面打不开）。
+
 services:
   namesrv:
-    image: apache/rocketmq:5.3.1
+    image: apache/rocketmq:${ROCKETMQ_VERSION:-5.5.0}
     container_name: rmqnamesrv
-    ports:
-      - 9876:9876
-    networks:
-      - rocketmq
     command: sh mqnamesrv
+    environment:
+      # 镜像脚本默认 -Xms1g -Xmx1g，本地开发压到 512m
+      HEAP_OPTS: -Xms512m -Xmx512m
+    ports:
+      - "127.0.0.1:9876:9876"          # 只监听本机，不向局域网暴露无 ACL 的 MQ
+    volumes:
+      - ./data/namesrv/logs:/home/rocketmq/logs
+    networks:
+      - local_net
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/9876'"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
 
   broker:
-    image: apache/rocketmq:5.3.1
+    image: apache/rocketmq:${ROCKETMQ_VERSION:-5.5.0}
     container_name: rmqbroker
-    ports:
-      - 10909:10909
-      - 10911:10911
-      - 10912:10912
+    command: sh mqbroker -c /home/rocketmq/broker.conf
     environment:
-      - NAMESRV_ADDR=rmqnamesrv:9876
+      NAMESRV_ADDR: rmqnamesrv:9876
+      # 镜像脚本默认 -Xms2g -Xmx2g，本地开发压到 1g
+      HEAP_OPTS: -Xms1g -Xmx1g -XX:MaxDirectMemorySize=512m
+    ports:
+      - "127.0.0.1:10909:10909"        # VIP 通道（remoting 客户端）
+      - "127.0.0.1:10911:10911"        # 主通道，golib 的 rocketmq-client-go 走这个
+    volumes:
+      - ./data/broker/store:/home/rocketmq/store     # topic / 消息 / 消费位点
+      - ./data/broker/logs:/home/rocketmq/logs
+      - ./conf/broker.conf:/home/rocketmq/broker.conf:ro
     depends_on:
-      - namesrv
+      namesrv:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/10911'"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
+    stop_grace_period: 30s             # 留时间给 broker 刷盘退出
     networks:
-      - rocketmq
-    command: sh mqbroker
+      - local_net
+    restart: unless-stopped
 
+  # 仅 RocketMQ 5.x gRPC 客户端（8081）需要；golib 的 mqaccess/rocketmq 是 remoting 客户端，
+  # 直连 9876 -> 10911，不经过 proxy，所以默认不启动（--profile proxy 才起）。
   proxy:
-    image: apache/rocketmq:5.3.1
+    profiles: ["proxy"]
+    image: apache/rocketmq:${ROCKETMQ_VERSION:-5.5.0}
     container_name: rmqproxy
-    networks:
-      - rocketmq
-    depends_on:
-      - broker
-      - namesrv
-    ports:
-      - 8080:8080
-      - 8081:8081
-    restart: on-failure
-    environment:
-      - NAMESRV_ADDR=rmqnamesrv:9876
     command: sh mqproxy
+    environment:
+      NAMESRV_ADDR: rmqnamesrv:9876
+      HEAP_OPTS: -Xms512m -Xmx512m
+    ports:
+      - "127.0.0.1:8080:8080"          # proxy remoting
+      - "127.0.0.1:8081:8081"          # gRPC
+    volumes:
+      - ./data/proxy/logs:/home/rocketmq/logs
+    depends_on:
+      broker:
+        condition: service_healthy
+    networks:
+      - local_net
+    restart: unless-stopped
 
   rocketmq-dashboard:
-    image: apacherocketmq/rocketmq-dashboard:latest
+    image: apacherocketmq/rocketmq-dashboard:${ROCKETMQ_DASHBOARD_VERSION:-2.1.0}
     container_name: rocketmq-dashboard
     ports:
-      - 8082:8080  # 控制台 Web 服务端口
+      - "127.0.0.1:8082:8082"          # 2.x 容器内默认端口就是 8082，不要映射到 8080
     environment:
-      - "ROCKETMQ_CONSOLE_PORT=8080"
-      - "NAMESRV_ADDR=rmqnamesrv:9876"  # Namesrv 地址，确保 Console 能连接到 NameServer
+      # 镜像内 application.yml 的 namesrvAddrs 是空列表，所以这个环境变量会被采用
+      NAMESRV_ADDR: rmqnamesrv:9876
+      JAVA_OPTS: -Xms256m -Xmx512m
     depends_on:
-      - namesrv
+      namesrv:
+        condition: service_healthy
     networks:
-      - rocketmq
+      - local_net
+    restart: unless-stopped
 
 networks:
-  rocketmq:
-    driver: bridge
+  local_net:
+    external: true
