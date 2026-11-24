@@ -1,0 +1,51 @@
+# RabbitMQ 本地开发环境：单节点 + 管理界面
+#
+# 前置（只需一次，合集约定）：docker network create local_net
+# 启动：cp .env.example .env（可选，不建也能用下面的默认值）→ docker compose up -d
+# 停止：docker compose down（数据保留在 ./data；rm -rf ./data 彻底重置）
+#
+# 版本说明：
+#   - 只有带 `-management` 后缀的镜像才内置管理插件（15672 界面 / HTTP API），
+#     裸 `rabbitmq:4.4.1` 镜像没有，别混用。
+#   - 锁补丁版 4.4.1：`latest` 会跟着大版本滚动，配置键和默认端口都可能变，
+#     本地环境静默失效比报错更难查。
+#   - 镜像多架构（amd64 / arm64），Apple Silicon 可直接跑。
+
+services:
+  rabbitmq:
+    image: rabbitmq:${RABBITMQ_VERSION:-4.4.1}-management
+    container_name: rabbitmq
+    # 固定 hostname：RabbitMQ 的数据目录是 mnesia/<node>@<hostname>，
+    # 不固定的话容器重建后 hostname 变了，./data 里的旧数据不会被识别（看起来像“数据丢了”）。
+    hostname: rabbitmq
+    ports:
+      - "127.0.0.1:${RABBITMQ_AMQP_PORT:-5672}:5672"          # AMQP 0-9-1 / AMQP 1.0 客户端
+      - "127.0.0.1:${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"  # 管理界面 / HTTP API
+    environment:
+      # 只在 ./data 首次初始化时生效；改账号要先 down + rm -rf ./data 再起来
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-admin}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-admin123}
+      # 注意：RabbitMQ 4.4 起 RABBITMQ_VM_MEMORY_HIGH_WATERMARK 等环境变量已废弃，
+      # 设置后容器会直接拒绝启动；内存/磁盘阈值统一写到 conf/rabbitmq.conf。
+    volumes:
+      - ./data:/var/lib/rabbitmq                                        # mnesia 数据 / erlang cookie
+      - ./conf/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro             # 内存/磁盘阈值、消费超时等配置
+    healthcheck:
+      # ping 只表示 Erlang VM 和 CLI 可用；插件加载还要几秒，所以 start_period 放宽
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 30s
+    stop_grace_period: 30s             # 留时间让 broker 正常关闭、刷盘
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    networks:
+      - local_net
+    restart: unless-stopped
+
+networks:
+  local_net:
+    external: true

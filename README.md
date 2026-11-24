@@ -27,6 +27,7 @@ docker network create local_net
 | `pgvector/` | pgvector | 向量数据库 |
 | `postgresql/` | PostgreSQL | 关系数据库 |
 | `prometheus-grafana/` | Prometheus + Grafana | 监控与可视化 |
+| `rabbitmq/` | RabbitMQ | 消息队列（含管理界面） |
 | `redis/` | Redis | 缓存/存储 |
 | `rocketmq/` | RocketMQ | 消息队列 |
 | `rustfs/` | RustFS | 对象存储 |
